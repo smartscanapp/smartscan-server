@@ -43,13 +43,13 @@ class FileIndexerWebSocketListener(ProcessorListener[str, tuple[str, np.ndarray]
 
 
     async def on_progress(self, progress):
-        await self.ws.send_json(ProgressMessage(progress=progress).dict())        
+        await self.ws.send_json(ProgressMessage(progress=progress).model_dump())        
     
     async def on_fail(self, result):
-        await self.ws.send_json(FailMessage(error=str(result.error)).dict())
+        await self.ws.send_json(FailMessage(error=str(result.error)).model_dump())
 
     async def on_error(self, e, item):
-        await self.ws.send_json(ErrorMessage(error=str(e), item=item).dict())
+        await self.ws.send_json(ErrorMessage(error=str(e), item=item).model_dump())
 
     async def on_complete(self, result):
         await self.ws.send_json(CompleteMessage(total_processed=result.total_processed, time_elapsed=result.time_elapsed).dict())
