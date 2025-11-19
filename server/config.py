@@ -6,8 +6,8 @@ from smartscan.constants import MODEL_REGISTRY, ModelName
 class SmartScanConfig:
     similarity_threshold: float = 0.7
     target_dirs: list[str] = field(default_factory=list)
-    image_encoder_model: ModelName = MODEL_REGISTRY["dinov2-small"]
-    text_encoder_model: ModelName = MODEL_REGISTRY['all-minilm-l6-v2']
+    image_encoder_model: ModelName = 'clip-vit-b-32-image'
+    text_encoder_model: ModelName = 'all-minilm-l6-v2'
 
 def load_config(path: str) -> SmartScanConfig:
     try:
