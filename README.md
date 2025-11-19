@@ -68,3 +68,18 @@ Options:
 * **Videos:** `.mp4`, `.mkv`, `.webm`
 
 ---
+
+## API Reference 
+
+| #  | Endpoint                       | Method    | Request                                                                              | Response                                           | Notes / Example                                                                      |
+| -- | ------------------------------ | --------- | ------------------------------------------------------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 1  | `/api/search/image`            | POST      | `multipart/form-data`: `query_image` (file, required), `threshold` (float, optional) | `{"results": ["id1", "id2"]}`                      | Search images. Example: `curl -F "query_image=@example.png" -F "threshold=0.75" ...` |
+| 2  | `/api/search/video`            | POST      | `multipart/form-data`: `query_image` (file, required), `threshold` (float, optional) | `{"results": ["vid1", "vid2"]}`                    | Search videos via frame.                                                             |
+| 3  | `/api/search/text`             | POST      | JSON: `{"query": "text", "threshold": 0.8}`                                          | `{"results": ["doc1", "doc2"]}`                    | Search text documents.                                                               |
+| 4  | `/ws/index`                    | WebSocket | JSON messages: `{"action":"index","dirs":["/path"]}` or `{"action":"stop"}`          | Streaming WebSocket messages with indexing updates | Real-time file indexing.                                                             |
+| 5  | `/api/collections/text/count`  | GET       | None                                                                                 | `{"count": 123}`                                   | Count items in text collection.                                                      |
+| 6  | `/api/collections/image/count` | GET       | None                                                                                 | `{"count": 45}`                                    | Count items in image collection.                                                     |
+| 7  | `/api/collections/video/count` | GET       | None                                                                                 | `{"count": 30}`                                    | Count items in video collection.                                                     |
+| 8  | `/api/select_model/image`      | POST      | JSON: `{"selected_model": "clip-vit-b-32-image"}`                                    | `{"current_model": "clip-vit-b-32-image"}`         | Switch image encoder model.                                                          |
+| 9  | `/api/select_model/text`       | POST      | JSON: `{"selected_model": "all-minilm-l6-v2"}`                                       | `{"current_model": "all-minilm-l6-v2"}`            | Switch text encoder model.                                                           |
+| 10 | `/api/select_model/video`      | POST      | JSON: `{"selected_model": "clip-vit-b-32-image"}`                                    | `{"current_model": "clip-vit-b-32-image"}`         | Switch video encoder model.                                                          |
