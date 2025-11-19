@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-from smartscan_server.app import app
+from server.app import app
 
 def main():
     parser = argparse.ArgumentParser()
