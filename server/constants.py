@@ -1,5 +1,5 @@
 import os 
-from smartscan.constants import MODEL_REGISTRY
+from smartscan.types import ModelName
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -11,11 +11,11 @@ DINO_V2_SMALL_MODEL_PATH = os.path.join(BASE_DIR, 'models/dinov2_small_quant.onn
 ULTRA_LIGHT_FACE_DETECTOR_MODEL_PATH = os.path.join(BASE_DIR, 'models/face_detect.onnx')
 INCEPTION_RESNET_MODEL_PATH = os.path.join(BASE_DIR, 'models/inception_resnet_v1_quant.onnx')
 
-MODEL_PATHS = {
-    MODEL_REGISTRY["clip-vit-b-32-image"]:CLIP_IMAGE_MODEL_PATH,
-    MODEL_REGISTRY['dinov2-small']: DINO_V2_SMALL_MODEL_PATH,
-    MODEL_REGISTRY['clip-vit-b-32-text']: CLIP_TEXT_MODEL_PATH,
-    MODEL_REGISTRY['all-minilm-l6-v2']: MINILM_MODEL_PATH,
+MODEL_PATHS: dict[ModelName, str] = {
+    "clip-vit-b-32-image":CLIP_IMAGE_MODEL_PATH,
+    'dinov2-small': DINO_V2_SMALL_MODEL_PATH,
+    'clip-vit-b-32-text': CLIP_TEXT_MODEL_PATH,
+    'all-minilm-l6-v2': MINILM_MODEL_PATH,
 }
 
 # DB
