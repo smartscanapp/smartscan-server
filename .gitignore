@@ -1,0 +1,8 @@
+config/
+__pycache__/
+venv/
+*.onnx
+db
+smartscan.json
+build
+*.egg-info
