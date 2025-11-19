@@ -12,8 +12,8 @@ from smartscan.indexer import FileIndexer
 from smartscan.providers import MiniLmTextEmbedder, ClipImageEmbedder, DinoSmallV2ImageEmbedder, ClipTextEmbedder, ImageEmbeddingProvider, TextEmbeddingProvider, ClipImageEmbedder
 from server.config import load_config
 from server.indexer import FileIndexerWebSocketListener
-from server.constants import  DB_DIR, SMARTSCAN_CONFIG_PATH, MODEL_REGISTRY, CLIP_IMAGE_MODEL_PATH, DINO_V2_SMALL_MODEL_PATH, CLIP_TEXT_MODEL_PATH, MINILM_MODEL_PATH
-
+from server.constants import  DB_DIR, SMARTSCAN_CONFIG_PATH, MODEL_REGISTRY, MODEL_PATHS
+from smartscan.constants import ModelName
 
 config = load_config(SMARTSCAN_CONFIG_PATH)
 
@@ -31,30 +31,25 @@ video_store = client.get_or_create_collection(
     metadata={"description": "Collection for videos"}
 )
 
-def get_image_encoder(path: str) -> ImageEmbeddingProvider:
-    if path == DINO_V2_SMALL_MODEL_PATH:
-        return DinoSmallV2ImageEmbedder(path)
-    elif path == CLIP_IMAGE_MODEL_PATH:
-        return ClipImageEmbedder(path)
-    raise ValueError(f"Invalid model path: {path}")
+def get_image_encoder(name: ModelName) -> ImageEmbeddingProvider:
+    if name == MODEL_REGISTRY["dinov2-small"]:
+        return DinoSmallV2ImageEmbedder(MODEL_PATHS[name])
+    elif name == MODEL_REGISTRY['clip-vit-b-32-image']:
+        return ClipImageEmbedder(MODEL_PATHS[name])
+    raise ValueError(f"Invalid model name: {name}")
 
-def get_text_encoder(path: str) -> TextEmbeddingProvider:
-    if path == MINILM_MODEL_PATH:
-        return MiniLmTextEmbedder(path)
-    elif path == CLIP_TEXT_MODEL_PATH:
-        return ClipTextEmbedder(path)
-    raise ValueError(f"Invalid model path: {path}")
+def get_text_encoder(name: str) -> TextEmbeddingProvider:
+    if name == MODEL_REGISTRY['all-minilm-l6-v2']:
+        return MiniLmTextEmbedder(MODEL_PATHS[name])
+    elif name == MODEL_REGISTRY['clip-vit-b-32-text']:
+        return ClipTextEmbedder(MODEL_PATHS[name])
+    raise ValueError(f"Invalid model name: {name}")
 
 
-image_encoder_path = MODEL_REGISTRY[config.image_encoder_model]['path']
-image_encoder = get_image_encoder(image_encoder_path)
-
-text_encoder_path = MODEL_REGISTRY[config.text_encoder_model]['path']
-text_encoder = get_text_encoder(text_encoder_path)
-
+image_encoder = get_image_encoder(config.image_encoder_model)
+text_encoder = get_text_encoder(config.text_encoder_model)
 image_encoder.init()
 text_encoder.init()
-
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 ALLOWED_EXT = ('png', 'jpg', 'jpeg', 'bmp', 'webp')
@@ -68,7 +63,7 @@ app.add_middleware(
     max_age=3600,
 )
 
-async def _image_query(store: chromadb.Collection, query_image: UploadFile = File(...), threshold: float = Form(0.6)):
+async def _image_query(store: chromadb.Collection, query_image: UploadFile = File(...), threshold: float = Form(config.similarity_threshold)):
     if query_image.filename is None:
         raise HTTPException(status_code=400, detail="Missing query_image")
     if not are_valid_files(ALLOWED_EXT, [query_image.filename]):
@@ -92,18 +87,18 @@ async def _image_query(store: chromadb.Collection, query_image: UploadFile = Fil
 
 
 @app.post("/api/search/image")
-async def search_images(query_image: UploadFile = File(...),threshold: float = Form(0.6),):
+async def search_images(query_image: UploadFile = File(...),threshold: float = Form(config.similarity_threshold)):
     return await _image_query(image_store, query_image, threshold)
 
 
 @app.post("/api/search/video")
-async def search_videos(query_image: UploadFile = File(...),threshold: float = Form(0.6),):
+async def search_videos(query_image: UploadFile = File(...),threshold: float = Form(config.similarity_threshold)):
     return await _image_query(video_store, query_image, threshold)
 
 
 class TextQueryRequest(BaseModel):
     query: str
-    threshold: float = 0.6
+    threshold: float = config.similarity_threshold
 
 
 async def _text_query(request: TextQueryRequest, store: chromadb.Collection):
