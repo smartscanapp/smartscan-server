@@ -25,6 +25,6 @@ def load_config(path: str) -> SmartScanConfig:
 def save_config(path: str, config: SmartScanConfig):
     try:
         with open(path, "w") as f:
-            json.dump(config, f)
+            json.dump(asdict(config), f)
     except:
         pass
