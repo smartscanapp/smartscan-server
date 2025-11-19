@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, field, asdict
-from smartscan.constants import MODEL_REGISTRY, ModelName
+from smartscan.types import ModelName
 
 @dataclass
 class SmartScanConfig:
