@@ -157,6 +157,8 @@ async def index(ws: WebSocket):
                 await indexer.run(files)
             elif msg.get("action") == "stop":
                 break
+    except RuntimeError:
+         print("Runtime Error")
     except WebSocketDisconnect:
         print("Client disconnected")
 
