@@ -1,11 +1,32 @@
-import numpy as np
+from numpy import ndarray
 from fastapi import WebSocket
+from pydantic import BaseModel
+from typing import Literal
+from starlette.websockets import WebSocketState
+
 from chromadb import Collection
 from smartscan.utils import are_valid_files
 from smartscan.processor import ProcessorListener
 
+class ProgressMessage(BaseModel):
+    type: Literal["progress"] = "progress"
+    progress: float
 
-class FileIndexerWebSocketListener(ProcessorListener[str, tuple[str, np.ndarray]]):
+class ErrorMessage(BaseModel):
+    type: Literal["error"] = "error"
+    error: str
+    item: str
+
+class FailMessage(BaseModel):
+    type: Literal["fail"] = "fail"
+    error: str
+
+class CompleteMessage(BaseModel):
+    type: Literal["complete"] = "complete"
+    total_processed: int
+    time_elapsed: float
+
+class FileIndexerWebSocketListener(ProcessorListener[str, tuple[str, ndarray]]):
     def __init__(
             self, 
             ws: WebSocket,
@@ -23,30 +44,32 @@ class FileIndexerWebSocketListener(ProcessorListener[str, tuple[str, np.ndarray]
 
 
     async def on_progress(self, progress):
-        await self.ws.send_json({
-            "type": "progress",
-            "progress": progress
-        })        
+        if self.ws.client_state == WebSocketState.CONNECTED:
+            try:
+                await self.ws.send_json(ProgressMessage(progress=progress).model_dump())  
+            except RuntimeError:
+                pass      
     
     async def on_fail(self, result):
-        await self.ws.send_json({
-            "type": "fail",
-            "error": str(result.error)
-        })
+        if self.ws.client_state == WebSocketState.CONNECTED:
+            try:
+                await self.ws.send_json(FailMessage(error=str(result.error)).model_dump())
+            except RuntimeError:
+                pass
 
     async def on_error(self, e, item):
-        await self.ws.send_json({
-            "type": "error",
-            "error": str(e),
-            "item": item
-        })
+        if self.ws.client_state == WebSocketState.CONNECTED:
+            try:
+                await self.ws.send_json(ErrorMessage(error=str(e), item=item).model_dump())
+            except RuntimeError:
+                pass
 
     async def on_complete(self, result):
-        await self.ws.send_json({
-            "type": "complete",
-            "total_processed": result.total_processed,
-            "time_elapsed": result.time_elapsed
-        })
+        if self.ws.client_state == WebSocketState.CONNECTED:
+            try:
+                await self.ws.send_json(CompleteMessage(total_processed=result.total_processed, time_elapsed=result.time_elapsed).model_dump())
+            except RuntimeError:
+                pass
 
     async def on_batch_complete(self, batch):
         if len(batch) <= 0:
