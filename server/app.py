@@ -1,47 +1,50 @@
 import chromadb
 from PIL import Image
 from pydantic import BaseModel
+from typing import Literal
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException,  WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 
+from smartscan.types import ModelName
+from smartscan.constants import SupportedFileTypes
 from smartscan.utils import are_valid_files, get_files_from_dirs
 from smartscan.indexer import FileIndexer
 from smartscan.providers import MiniLmTextEmbedder, ClipImageEmbedder, DinoSmallV2ImageEmbedder, ClipTextEmbedder, ImageEmbeddingProvider, TextEmbeddingProvider, ClipImageEmbedder
-from server.config import load_config
+from server.config import load_config, save_config
 from server.indexer import FileIndexerWebSocketListener
-from server.constants import  DB_DIR, SMARTSCAN_CONFIG_PATH, MODEL_REGISTRY, MODEL_PATHS
-from smartscan.constants import ModelName
+from server.constants import  DB_DIR, SMARTSCAN_CONFIG_PATH, MODEL_PATHS
 
 config = load_config(SMARTSCAN_CONFIG_PATH)
 
 client = chromadb.PersistentClient(path=DB_DIR)
-text_store = client.get_or_create_collection(
-    name=f"{config.text_encoder_model}_text_collection",
-    metadata={"description": "Collection for text documents"}
-)
-image_store = client.get_or_create_collection(
-    name=f"{config.image_encoder_model}_image_collection",
-    metadata={"description": "Collection for images"}
-) 
-video_store = client.get_or_create_collection(
-    name=f"{config.image_encoder_model}_video_collection",
-    metadata={"description": "Collection for videos"}
+
+FileType = Literal['text', 'image', 'video']
+
+# Unique name based on model and data type prevents embedding dimensions related errors
+def get_collection(model_name: ModelName, type: FileType):
+    return client.get_or_create_collection(
+    name=f"{model_name}_{type}_collection",
+    metadata={"description": f"Collection for {type}s"}
 )
 
+text_store = get_collection(config.text_encoder_model, 'text')
+image_store = get_collection(config.image_encoder_model, 'image')
+video_store = get_collection(config.image_encoder_model, 'video')
+
 def get_image_encoder(name: ModelName) -> ImageEmbeddingProvider:
-    if name == MODEL_REGISTRY["dinov2-small"]:
+    if name == "dinov2-small":
         return DinoSmallV2ImageEmbedder(MODEL_PATHS[name])
-    elif name == MODEL_REGISTRY['clip-vit-b-32-image']:
+    elif name == 'clip-vit-b-32-image':
         return ClipImageEmbedder(MODEL_PATHS[name])
     raise ValueError(f"Invalid model name: {name}")
 
-def get_text_encoder(name: str) -> TextEmbeddingProvider:
-    if name == MODEL_REGISTRY['all-minilm-l6-v2']:
+def get_text_encoder(name: ModelName) -> TextEmbeddingProvider:
+    if name == 'all-minilm-l6-v2':
         return MiniLmTextEmbedder(MODEL_PATHS[name])
-    elif name == MODEL_REGISTRY['clip-vit-b-32-text']:
+    elif name == 'clip-vit-b-32-text':
         return ClipTextEmbedder(MODEL_PATHS[name])
     raise ValueError(f"Invalid model name: {name}")
 
@@ -52,7 +55,6 @@ image_encoder.init()
 text_encoder.init()
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
-ALLOWED_EXT = ('png', 'jpg', 'jpeg', 'bmp', 'webp')
 
 app = FastAPI()
 app.add_middleware(
@@ -66,7 +68,7 @@ app.add_middleware(
 async def _image_query(store: chromadb.Collection, query_image: UploadFile = File(...), threshold: float = Form(config.similarity_threshold)):
     if query_image.filename is None:
         raise HTTPException(status_code=400, detail="Missing query_image")
-    if not are_valid_files(ALLOWED_EXT, [query_image.filename]):
+    if not are_valid_files(SupportedFileTypes.IMAGE, [query_image.filename]):
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
     try:
@@ -176,3 +178,52 @@ async def count_image_collection():
 @app.get("/api/collections/video/count")
 async def count_video_collection():
       return await _count(video_store)
+
+
+async def _select_encoder(selected_model: ModelName, type: FileType):
+    if selected_model is None:
+        raise HTTPException(status_code=400, detail="Missing selected_model")
+  
+    try:
+        if type == 'image' or type == 'video':
+            global image_encoder
+            image_encoder.close_session()
+            image_encoder = get_image_encoder(selected_model)
+            image_encoder.init()
+            config.image_encoder_model = selected_model
+        else:
+            global text_encoder
+            text_encoder.close_session()
+            text_encoder = get_text_encoder(selected_model)
+            text_encoder.init()
+            config.text_encoder_model = selected_model
+            global text_store
+            text_store = get_collection(selected_model, 'text')
+        
+        if type == 'image':
+            global image_store
+            image_store = get_collection(selected_model, 'image')
+        elif type == 'video':
+            global video_store
+            video_store = get_collection(selected_model, 'video')
+            
+        save_config(SMARTSCAN_CONFIG_PATH, config)         
+    except Exception as _:
+            raise HTTPException(status_code=500, detail="Error selecting model")
+
+    return JSONResponse({"current_model": selected_model})
+
+
+@app.post("/api/select_model/image")
+async def select_image_encoder(selected_model: ModelName):
+    return await _select_encoder(selected_model, 'image')
+
+@app.post("/api/select_model/text")
+async def select_text_encoder(selected_model: ModelName):
+    return await _select_encoder(selected_model, 'text')
+
+
+@app.post("/api/select_model/video")
+async def select_text_encoder(selected_model: ModelName):
+    return await _select_encoder(selected_model, 'video')
+
