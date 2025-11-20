@@ -7,6 +7,9 @@ from starlette.websockets import WebSocketState
 from chromadb import Collection
 from smartscan.processor import ProcessorListener
 
+class ActiveMessage(BaseModel):
+    type: Literal["active"] = "active"
+    
 class ProgressMessage(BaseModel):
     type: Literal["progress"] = "progress"
     progress: float
@@ -33,6 +36,13 @@ class FileIndexerWebSocketListener(ProcessorListener[str, tuple[str, ndarray]]):
             ):
         self.ws = ws
         self.store = store
+
+    async def on_active(self):
+        if self.ws.client_state == WebSocketState.CONNECTED:
+            try:
+                await self.ws.send_json(ActiveMessage().model_dump())  
+            except RuntimeError:
+                pass 
 
     async def on_progress(self, progress):
         if self.ws.client_state == WebSocketState.CONNECTED:
