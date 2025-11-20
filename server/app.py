@@ -156,7 +156,10 @@ async def _index( ws: WebSocket, allowed_exts: tuple[str], indexer: FileIndexer,
         files = get_files_from_dirs(dirpaths, allowed_exts=allowed_exts)
         filtered_files = _filter(files, image_store, text_store, video_store)
         await indexer.run(filtered_files)
-    else: ws.send_json(FailMessage(error="invalid action").model_dump())
+        await ws.close()
+    else: 
+        await ws.send_json(FailMessage(error="invalid action").model_dump())
+        await ws.close()
  
 
 
