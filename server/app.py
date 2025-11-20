@@ -272,16 +272,16 @@ async def _select_encoder(selected_model: ModelName, type: FileType):
     return JSONResponse({"current_model": selected_model})
 
 
-@app.post("/api/select_model/image")
+@app.post("/api/select_model/images")
 async def select_image_encoder(selected_model: ModelName):
     return await _select_encoder(selected_model, 'image')
 
-@app.post("/api/select_model/text")
+@app.post("/api/select_model/docs")
 async def select_text_encoder(selected_model: ModelName):
     return await _select_encoder(selected_model, 'text')
 
 
-@app.post("/api/select_model/video")
+@app.post("/api/select_model/videos")
 async def select_text_encoder(selected_model: ModelName):
     return await _select_encoder(selected_model, 'video')
 
