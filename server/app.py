@@ -14,7 +14,7 @@ from smartscan.utils import are_valid_files, get_files_from_dirs
 from smartscan.indexer import FileIndexer
 from smartscan.providers import MiniLmTextEmbedder, ClipImageEmbedder, DinoSmallV2ImageEmbedder, ClipTextEmbedder, ImageEmbeddingProvider, TextEmbeddingProvider, ClipImageEmbedder
 from server.config import load_config, save_config
-from server.indexer import FileIndexerWebSocketListener
+from server.indexer import FileIndexerWebSocketListener, FailMessage
 from server.constants import  DB_DIR, SMARTSCAN_CONFIG_PATH, MODEL_PATHS
 
 config = load_config(SMARTSCAN_CONFIG_PATH)
@@ -88,12 +88,12 @@ async def _image_query(store: chromadb.Collection, query_image: UploadFile = Fil
     return JSONResponse({"results": ids})
 
 
-@app.post("/api/search/image")
+@app.post("/api/search/images")
 async def search_images(query_image: UploadFile = File(...),threshold: float = Form(config.similarity_threshold)):
     return await _image_query(image_store, query_image, threshold)
 
 
-@app.post("/api/search/video")
+@app.post("/api/search/videos")
 async def search_videos(query_image: UploadFile = File(...),threshold: float = Form(config.similarity_threshold)):
     return await _image_query(video_store, query_image, threshold)
 
@@ -122,22 +122,49 @@ async def _text_query(request: TextQueryRequest, store: chromadb.Collection):
     return JSONResponse({"results": ids})
 
 
-@app.post("/api/search/text")
+@app.post("/api/search/docs")
 async def search_documents(request: TextQueryRequest):
     return await _text_query(request, text_store)
 
 
-@app.websocket("/ws/index")
+def _filter(items: list[str], image_store: chromadb.Collection | None = None, text_store: chromadb.Collection| None = None,video_store: chromadb.Collection| None = None ) -> list[str]:
+        image_ids = _get_exisiting_ids(image_store)
+        text_ids = _get_exisiting_ids(text_store)
+        video_ids = _get_exisiting_ids(video_store)
+        exclude = set(image_ids) | set(text_ids) | set(video_ids)
+        return [item for item in items if item not in exclude]
+  
+def _get_exisiting_ids (store: chromadb.Collection| None = None) -> list[str]:
+        limit = 100
+        offset = 0
+        ids = []
+        if not store:
+             return ids
+        
+        while True:
+            batch = store.get(limit=limit, offset=offset)
+            if not batch['ids']:
+                break
+            ids.extend(batch['ids'])
+            offset += limit
+        return ids
+
+async def _index( ws: WebSocket, allowed_exts: tuple[str], indexer: FileIndexer, image_store: chromadb.Collection | None = None, text_store: chromadb.Collection| None = None,video_store: chromadb.Collection| None = None):
+    msg = await ws.receive_json()
+    if msg.get("action") == "index":
+        dirpaths = msg.get("dirs", [])
+        files = get_files_from_dirs(dirpaths, allowed_exts=allowed_exts)
+        filtered_files = _filter(files, image_store, text_store, video_store)
+        await indexer.run(filtered_files)
+    else: ws.send_json(FailMessage(error="invalid action").model_dump())
+ 
+
+
+@app.websocket("/ws/index/docs")
 async def index(ws: WebSocket):
     await ws.accept()
 
-    listener = FileIndexerWebSocketListener(
-        ws,
-        image_store=image_store,
-        text_store=text_store,
-        video_store=video_store,
-        )
-    
+    listener = FileIndexerWebSocketListener(ws,store=text_store)
     indexer = FileIndexer(
         image_encoder=image_encoder,
         text_encoder=text_encoder,
@@ -145,15 +172,46 @@ async def index(ws: WebSocket):
     )
 
     try:
-        while True:
-            msg = await ws.receive_json()
-            if msg.get("action") == "index":
-                dirpaths = msg.get("dirs", [])
-                allowed_exts = indexer.valid_img_exts + indexer.valid_txt_exts + indexer.valid_vid_exts
-                files = get_files_from_dirs(dirpaths, allowed_exts=allowed_exts)
-                await indexer.run(files)
-            elif msg.get("action") == "stop":
-                break
+        await _index(ws, SupportedFileTypes.TEXT, indexer, text_store=text_store)
+    except RuntimeError:
+         print("Runtime Error")
+    except WebSocketDisconnect:
+        print("Client disconnected")
+
+
+@app.websocket("/ws/index/images")
+async def index(ws: WebSocket):
+    await ws.accept()
+
+    listener = FileIndexerWebSocketListener(ws,store=image_store)
+    indexer = FileIndexer(
+        image_encoder=image_encoder,
+        text_encoder=text_encoder,
+        listener=listener,
+    )
+
+    try:
+        await _index(ws, SupportedFileTypes.IMAGE, indexer, image_store=image_store)
+    except RuntimeError:
+         print("Runtime Error")
+    except WebSocketDisconnect:
+        print("Client disconnected")
+
+
+@app.websocket("/ws/index/videos")
+async def index(ws: WebSocket):
+    await ws.accept()
+
+    listener = FileIndexerWebSocketListener(ws,store=video_store,)
+
+    indexer = FileIndexer(
+        image_encoder=image_encoder,
+        text_encoder=text_encoder,
+        listener=listener,
+    )
+
+    try:
+        await _index(ws, SupportedFileTypes.VIDEO, indexer, video_store=video_store)
     except RuntimeError:
          print("Runtime Error")
     except WebSocketDisconnect:
@@ -167,15 +225,15 @@ async def _count(store: chromadb.Collection):
             raise HTTPException(status_code=500, detail="Error counting items in collection")
     return JSONResponse({"count": count})
 
-@app.get("/api/collections/text/count")
+@app.get("/api/collections/docs/count")
 async def count_documents_collection():
     return await _count(text_store)
 
-@app.get("/api/collections/image/count")
+@app.get("/api/collections/images/count")
 async def count_image_collection():
     return await _count(image_store)
 
-@app.get("/api/collections/video/count")
+@app.get("/api/collections/videos/count")
 async def count_video_collection():
       return await _count(video_store)
 
