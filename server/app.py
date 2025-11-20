@@ -225,15 +225,15 @@ async def _count(store: chromadb.Collection):
             raise HTTPException(status_code=500, detail="Error counting items in collection")
     return JSONResponse({"count": count})
 
-@app.get("/api/collections/docs/count")
+@app.get("/api/count/docs")
 async def count_documents_collection():
     return await _count(text_store)
 
-@app.get("/api/collections/images/count")
+@app.get("/api/count/images")
 async def count_image_collection():
     return await _count(image_store)
 
-@app.get("/api/collections/videos/count")
+@app.get("/api/count/videos")
 async def count_video_collection():
       return await _count(video_store)
 
