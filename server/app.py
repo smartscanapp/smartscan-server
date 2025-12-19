@@ -24,15 +24,15 @@ client = chromadb.PersistentClient(path=DB_DIR, settings=chromadb.Settings(anony
 FileType = Literal['text', 'image', 'video']
 
 # Unique name based on model and data type prevents embedding dimensions related errors
-def get_collection(model_name: ModelName, type: FileType):
+def get_collection(client: chromadb.PersistentClient, model_name: ModelName, type: FileType):
     return client.get_or_create_collection(
     name=f"{model_name}_{type}_collection",
     metadata={"description": f"Collection for {type}s"}
 )
 
-text_store = get_collection(config.text_encoder_model, 'text')
-image_store = get_collection(config.image_encoder_model, 'image')
-video_store = get_collection(config.image_encoder_model, 'video')
+text_store = get_collection(client, config.text_encoder_model, 'text')
+image_store = get_collection(client, config.image_encoder_model, 'image')
+video_store = get_collection(client, config.image_encoder_model, 'video')
 
 def get_image_encoder(name: ModelName) -> ImageEmbeddingProvider:
     if name == "dinov2-small":
@@ -259,14 +259,14 @@ async def _select_encoder(selected_model: ModelName, type: FileType):
             text_encoder.init()
             config.text_encoder_model = selected_model
             global text_store
-            text_store = get_collection(selected_model, 'text')
+            text_store = get_collection(client, selected_model, 'text')
         
         if type == 'image':
             global image_store
-            image_store = get_collection(selected_model, 'image')
+            image_store = get_collection(client, selected_model, 'image')
         elif type == 'video':
             global video_store
-            video_store = get_collection(selected_model, 'video')
+            video_store = get_collection(client, selected_model, 'video')
             
         save_config(SMARTSCAN_CONFIG_PATH, config)         
     except Exception as _:
