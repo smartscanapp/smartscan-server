@@ -1,11 +1,12 @@
-from numpy import ndarray
 from fastapi import WebSocket
 from pydantic import BaseModel
 from typing import Literal
 from starlette.websockets import WebSocketState
 
 from chromadb import Collection
+
 from smartscan.processor import ProcessorListener
+from smartscan.types import ItemEmbedding
 
 class ActiveMessage(BaseModel):
     type: Literal["active"] = "active"
@@ -28,7 +29,7 @@ class CompleteMessage(BaseModel):
     total_processed: int
     time_elapsed: float
 
-class FileIndexerWebSocketListener(ProcessorListener[str, tuple[str, ndarray]]):
+class FileIndexerWebSocketListener(ProcessorListener[str, ItemEmbedding]):
     def __init__(
             self, 
             ws: WebSocket,
@@ -75,7 +76,6 @@ class FileIndexerWebSocketListener(ProcessorListener[str, tuple[str, ndarray]]):
     async def on_batch_complete(self, batch):
         if len(batch) <= 0:
             return
-        
-        ids, embeds =  map(list, zip(*batch))
-        self.store.add(ids = ids, embeddings=embeds)
+        ids, embeddings = zip(*((item.item_id, item.embedding) for item in batch))
+        self.store.add(ids = ids, embeddings=embeddings)
 
