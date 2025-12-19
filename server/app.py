@@ -19,7 +19,7 @@ from server.constants import  DB_DIR, SMARTSCAN_CONFIG_PATH, MODEL_PATHS
 
 config = load_config(SMARTSCAN_CONFIG_PATH)
 
-client = chromadb.PersistentClient(path=DB_DIR)
+client = chromadb.PersistentClient(path=DB_DIR, settings=chromadb.Settings(anonymized_telemetry=False))
 
 FileType = Literal['text', 'image', 'video']
 
